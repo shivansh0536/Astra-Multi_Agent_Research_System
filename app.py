@@ -80,6 +80,10 @@ html, body, [class*="css"] {
     background: rgba(255, 255, 255, 0.05) !important;
 }
 
+div.stButton {
+    display: flex;
+    justify-content: center;
+}
 .stButton > button {
     background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%) !important;
     color: white !important;
@@ -90,8 +94,6 @@ html, body, [class*="css"] {
     transition: all 0.3s ease !important;
     box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3) !important;
     width: 240px !important;
-    display: block !important;
-    margin: 0 auto !important;
 }
 .stButton > button:hover {
     transform: translateY(-2px) !important;
