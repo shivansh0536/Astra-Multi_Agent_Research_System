@@ -44,10 +44,10 @@ html, body, [class*="css"] {
 /* ── Main Area ── */
 .main-header {
     text-align: center;
-    padding: 3rem 0 2rem 0;
+    padding: 1.5rem 0 1rem 0;
 }
 .main-title {
-    font-size: 3.5rem;
+    font-size: 2.8rem;
     font-weight: 700;
     background: linear-gradient(to right, #e2e8f0, #94a3b8);
     -webkit-background-clip: text;
@@ -272,8 +272,6 @@ def get_step_class(step_name):
     return ""
 
 if st.session_state.running or st.session_state.done:
-    st.markdown("<br>", unsafe_allow_html=True)
-    
     # Workflow Progress Bar
     st.markdown(f"""
     <div style="position: relative;">
@@ -304,35 +302,40 @@ if st.session_state.running and not st.session_state.done:
     status.info("🔍 Search Agent is exploring the web...")
     
     # Stream the LangGraph
-    for event in research_graph.stream({"topic": topic_val, "iterations": 0}):
-        for node_name, state_update in event.items():
-            if node_name == "search_node":
-                r["search"] = state_update.get("search_data", "")
-                st.session_state.results = r
-                status.info("📄 Reader Agent is extracting content from top sources...")
-            elif node_name == "reader_node":
-                r["reader"] = state_update.get("scraped_data", "")
-                st.session_state.results = r
-                status.info("✍️ Writer is drafting the comprehensive report...")
-            elif node_name == "writer_node":
-                r["writer"] = state_update.get("draft", "")
-                r["iterations"] = state_update.get("iterations", 1)
-                st.session_state.results = r
-                status.info("🧐 Critic is performing peer review...")
-            elif node_name == "critic_node":
-                r["critic"] = state_update.get("critique", "")
-                r["score"] = state_update.get("score", 0)
-                st.session_state.results = r
-                
-                # If the score is less than 8 and we haven't hit the loop limit, it will route back
-                if r["score"] < 8 and r.get("iterations", 1) < 3:
-                    st.toast(f"Critic rejected draft (Score: {r['score']}/10). Writer is revising...", icon="🔄")
-                    status.warning(f"🔄 Score {r['score']}/10. Writer is revising the draft based on critique...")
-                    
-                    # Trick the UI into glowing the Writer node again
-                    if "critic" in r: del r["critic"]
-                    if "writer" in r: del r["writer"]
+    try:
+        for event in research_graph.stream({"topic": topic_val, "iterations": 0}):
+            for node_name, state_update in event.items():
+                if node_name == "search_node":
+                    r["search"] = state_update.get("search_data", "")
                     st.session_state.results = r
+                    status.info("📄 Reader Agent is extracting content from top sources...")
+                elif node_name == "reader_node":
+                    r["reader"] = state_update.get("scraped_data", "")
+                    st.session_state.results = r
+                    status.info("✍️ Writer is drafting the comprehensive report...")
+                elif node_name == "writer_node":
+                    r["writer"] = state_update.get("draft", "")
+                    r["iterations"] = state_update.get("iterations", 1)
+                    st.session_state.results = r
+                    status.info("🧐 Critic is performing peer review...")
+                elif node_name == "critic_node":
+                    r["critic"] = state_update.get("critique", "")
+                    r["score"] = state_update.get("score", 0)
+                    st.session_state.results = r
+                    
+                    # If the score is less than 8 and we haven't hit the loop limit, it will route back
+                    if r["score"] < 8 and r.get("iterations", 1) < 3:
+                        st.toast(f"Critic rejected draft (Score: {r['score']}/10). Writer is revising...", icon="🔄")
+                        status.warning(f"🔄 Score {r['score']}/10. Writer is revising the draft based on critique...")
+                        
+                        # Trick the UI into glowing the Writer node again
+                        if "critic" in r: del r["critic"]
+                        if "writer" in r: del r["writer"]
+                        st.session_state.results = r
+    except Exception as e:
+        status.error(f"⚠️ A connection error occurred: {str(e)}")
+        st.session_state.running = False
+        st.stop()
     
     status.empty()
     st.session_state.running = False
