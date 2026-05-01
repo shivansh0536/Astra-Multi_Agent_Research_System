@@ -89,7 +89,9 @@ html, body, [class*="css"] {
     padding: 0.75rem 2rem !important;
     transition: all 0.3s ease !important;
     box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3) !important;
-    width: 100%;
+    width: 240px !important;
+    display: block !important;
+    margin: 0 auto !important;
 }
 .stButton > button:hover {
     transform: translateY(-2px) !important;
@@ -243,7 +245,7 @@ with col2:
         placeholder="Enter your research topic (e.g. Advancements in Solid State Batteries)", 
         label_visibility="collapsed"
     )
-    run_btn = st.button("Initialize Swarm", use_container_width=True)
+    run_btn = st.button("Initialize Swarm")
 
 # ── Logic & Workflow Visualization ───────────────────────────────────────────
 if run_btn:
