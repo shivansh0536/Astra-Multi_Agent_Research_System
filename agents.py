@@ -18,6 +18,8 @@ class ResearchState(TypedDict):
     topic: str
     search_data: str
     scraped_data: str
+    optimist_view: str
+    skeptic_view: str
     draft: str
     critique: str
     score: int
@@ -40,27 +42,58 @@ def reader_node(state: ResearchState):
     })
     return {"scraped_data": res["messages"][-1].content}
 
-# 3rd agent: Writer
+# 3rd agent: The Optimist
+optimist_prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are the 'Optimist' agent. Your goal is to find the most exciting, high-potential, and positive aspects of the research data. Highlight the breakthroughs, the benefits, and the 'Best Case Scenario'."),
+    ("human", "Topic: {topic}\n\nResearch Data:\n{data}\n\nProvide a high-energy, positive perspective on these findings.")
+])
+optimist_chain = optimist_prompt | llm | StrOutputParser()
+
+def optimist_node(state: ResearchState):
+    data = f"{state.get('search_data', '')}\n\n{state.get('scraped_data', '')}"
+    res = optimist_chain.invoke({"topic": state["topic"], "data": data[:4000]})
+    return {"optimist_view": res}
+
+# 4th agent: The Skeptic
+skeptic_prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are the 'Skeptic' agent. Your goal is to identify risks, ethical concerns, technical limitations, and 'Worst Case Scenarios' based on the research data. Be critical but factual."),
+    ("human", "Topic: {topic}\n\nResearch Data:\n{data}\n\nProvide a critical, cautious, and skeptical perspective on these findings.")
+])
+skeptic_chain = skeptic_prompt | llm | StrOutputParser()
+
+def skeptic_node(state: ResearchState):
+    data = f"{state.get('search_data', '')}\n\n{state.get('scraped_data', '')}"
+    res = skeptic_chain.invoke({"topic": state["topic"], "data": data[:4000]})
+    return {"skeptic_view": res}
+
+# 5th agent: Writer (The Synthesizer)
 writer_prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are an expert research writer. Write clear, structured and insightful reports."),
-    ("human", """Write a detailed research report on the topic below.
+    ("system", "You are an expert research synthesizer. Your job is to weave together research data and two opposing perspectives (Optimist and Skeptic) into a balanced, professional report."),
+    ("human", """Write a comprehensive research report on the topic below.
 
 Topic: {topic}
 
-Research Gathered:
+THE OPTIMIST'S VIEW:
+{optimist}
+
+THE SKEPTIC'S VIEW:
+{skeptic}
+
+Research Data:
 {research}
 
-Previous Critique to Address (if any):
+Previous Critique to Address:
 {critique}
 
 Structure the report as:
-- Introduction
-- Key Findings (minimum 3 well-explained points)
-- Visual Concept: You MUST include a Mermaid.js flowchart (graph TD). CRITICAL MERMAID RULES: 1) Use single letters for node IDs (A, B, C). 2) All node labels MUST be wrapped in double quotes (e.g., A["Simple Label"]). 3) NEVER use parentheses, brackets, hyphens, colons, or HTML tags inside the labels. 4) Keep it simple (max 6 nodes). Wrap strictly in ```mermaid ... ``` blocks.
-- Conclusion
-- Sources (list all URLs found in the research)
+1. Introduction
+2. The Clash of Perspectives (Summarize the debate between the Optimist and Skeptic)
+3. Key Findings (Minimum 3 points. Wrap any sub-topic that warrants deeper research in double brackets, e.g., [[Specific Tech Name]] or [[Specific Risk Name]])
+4. Visual Concept: You MUST include a Mermaid.js flowchart (graph TD). CRITICAL MERMAID RULES: 1) Use single letters for node IDs (A, B, C). 2) All node labels MUST be wrapped in double quotes (e.g., A["Simple Label"]). 3) NEVER use parentheses, brackets, hyphens, colons, or HTML tags inside the labels. 4) Keep it simple (max 6 nodes). Wrap strictly in ```mermaid ... ``` blocks.
+5. Conclusion & Future Outlook
+6. Sources
 
-Be detailed, factual and professional."""),
+Note: The [[Sub-topic]] tags are CRITICAL for the discovery engine. Use them for technical terms or interesting side-topics."""),
 ])
 writer_chain = writer_prompt | llm | StrOutputParser()
 
@@ -70,7 +103,9 @@ def writer_node(state: ResearchState):
     
     draft = writer_chain.invoke({
         "topic": state["topic"],
-        "research": research_combined,
+        "research": research_combined[:3000],
+        "optimist": state.get("optimist_view", ""),
+        "skeptic": state.get("skeptic_view", ""),
         "critique": critique
     })
     
@@ -130,12 +165,16 @@ def route_critique(state: ResearchState):
 workflow = StateGraph(ResearchState)
 workflow.add_node("search_node", search_node)
 workflow.add_node("reader_node", reader_node)
+workflow.add_node("optimist_node", optimist_node)
+workflow.add_node("skeptic_node", skeptic_node)
 workflow.add_node("writer_node", writer_node)
 workflow.add_node("critic_node", critic_node)
 
 workflow.set_entry_point("search_node")
 workflow.add_edge("search_node", "reader_node")
-workflow.add_edge("reader_node", "writer_node")
+workflow.add_edge("reader_node", "optimist_node")
+workflow.add_edge("optimist_node", "skeptic_node")
+workflow.add_edge("skeptic_node", "writer_node")
 workflow.add_edge("writer_node", "critic_node")
 workflow.add_conditional_edges("critic_node", route_critique, {
     END: END,

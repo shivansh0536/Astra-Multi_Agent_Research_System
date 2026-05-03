@@ -7,12 +7,6 @@ import markdown
 import re
 
 # ── Page config ──────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Astra · Agentic OS",
-    page_icon="✨",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
 
 # ── Custom CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -316,7 +310,14 @@ if st.session_state.running and not st.session_state.done:
                 elif node_name == "reader_node":
                     r["reader"] = state_update.get("scraped_data", "")
                     st.session_state.results = r
-                    status.info("✍️ Writer is drafting the comprehensive report...")
+                    status.info("🎭 Spawning the Optimist and Skeptic for debate...")
+                elif node_name == "optimist_node":
+                    r["optimist"] = state_update.get("optimist_view", "")
+                    st.session_state.results = r
+                elif node_name == "skeptic_node":
+                    r["skeptic"] = state_update.get("skeptic_view", "")
+                    st.session_state.results = r
+                    status.info("✍️ Synthesizer is weaving the perspectives into a report...")
                 elif node_name == "writer_node":
                     r["writer"] = state_update.get("draft", "")
                     r["iterations"] = state_update.get("iterations", 1)
@@ -387,11 +388,28 @@ def generate_pdf(text):
 
 # ── Results Presentation ─────────────────────────────────────────────────────
 if st.session_state.done and r:
-    tab1, tab2, tab3, tab4 = st.tabs(["📝 Final Report", "💬 Chat with Astra", "🧐 Critic Feedback", "🔍 Raw Logs"])
+    tab1, tab_debate, tab2, tab3, tab4 = st.tabs(["📝 Final Report", "⚔️ Clash of Perspectives", "💬 Chat with Astra", "🧐 Critic Feedback", "🔍 Raw Logs"])
     
     with tab1:
         st.markdown('<div class="content-card">', unsafe_allow_html=True)
         render_mermaid(r["writer"])
+        
+        # Infinite Discovery Logic
+        findings = re.findall(r'\[\[(.*?)\]\]', r["writer"])
+        if findings:
+            st.markdown("---")
+            st.markdown("### 🕸️ Infinite Discovery: Drill Down")
+            st.markdown("Select a sub-topic to launch a new targeted research swarm:")
+            
+            # Show findings as buttons in a grid
+            cols = st.columns(3)
+            for i, topic_tag in enumerate(list(set(findings))):
+                if cols[i % 3].button(f"🔍 {topic_tag}", key=f"drill_{i}"):
+                    st.session_state.topic_input = topic_tag
+                    st.session_state.results = {}
+                    st.session_state.running = True
+                    st.session_state.done = False
+                    st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
         
         # Download buttons in columns
@@ -414,6 +432,17 @@ if st.session_state.done and r:
                 )
             except Exception as e:
                 st.error(f"Could not generate PDF: {e}")
+
+    with tab_debate:
+        st.markdown('<div class="content-card">', unsafe_allow_html=True)
+        col_opt, col_skp = st.columns(2)
+        with col_opt:
+            st.markdown("### 🌟 The Optimist")
+            st.info(r.get("optimist", "Preparing perspective..."))
+        with col_skp:
+            st.markdown("### 🛡️ The Skeptic")
+            st.warning(r.get("skeptic", "Preparing perspective..."))
+        st.markdown('</div>', unsafe_allow_html=True)
         
     with tab2:
         st.markdown('<div class="content-card">', unsafe_allow_html=True)
