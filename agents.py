@@ -15,6 +15,7 @@ llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
 # State
 class ResearchState(TypedDict):
     topic: str
+    model: str
     search_data: str
     scraped_data: str
     optimist_view: str
@@ -23,6 +24,10 @@ class ResearchState(TypedDict):
     critique: str
     score: int
     iterations: int
+
+def get_llm(state: ResearchState):
+    model_name = state.get("model", "llama-3.3-70b-versatile")
+    return ChatGroq(model=model_name, temperature=0)
 
 # 1st agent: Search
 def search_node(state: ResearchState):
@@ -37,6 +42,7 @@ def search_node(state: ResearchState):
 def reader_node(state: ResearchState):
     topic = state["topic"]
     search_data = state.get("search_data", "")
+    llm_dynamic = get_llm(state)
     
     # Ask LLM to pick the top 3 most relevant URLs
     url_selector_prompt = ChatPromptTemplate.from_messages([
@@ -44,7 +50,7 @@ def reader_node(state: ResearchState):
         ("human", "Topic: {topic}\n\nSearch Results:\n{search_data}")
     ])
     
-    url_chain = url_selector_prompt | llm | StrOutputParser()
+    url_chain = url_selector_prompt | llm_dynamic | StrOutputParser()
     try:
         urls_raw = url_chain.invoke({"topic": topic, "search_data": search_data[:2000]})
         urls = [re.sub(r'[`\'"\s]', '', u) for u in urls_raw.split(",") if "http" in u]
@@ -52,7 +58,7 @@ def reader_node(state: ResearchState):
         urls = []
         
     if not urls:
-        urls = re.findall(r'https?://[^\s\)\}\]]+', search_data)
+        urls = re.findall(r'https?://[^\s\)\%\}#\]]+', search_data)
         
     scraped_content = ""
     success = False
@@ -78,11 +84,12 @@ optimist_prompt = ChatPromptTemplate.from_messages([
     ("system", "You are the 'Optimist' agent. Your goal is to find the most exciting, high-potential, and positive aspects of the research data. Highlight the breakthroughs, the benefits, and the 'Best Case Scenario'."),
     ("human", "Topic: {topic}\n\nResearch Data:\n{data}\n\nProvide a high-energy, positive perspective on these findings.")
 ])
-optimist_chain = optimist_prompt | llm | StrOutputParser()
 
 def optimist_node(state: ResearchState):
+    llm_dynamic = get_llm(state)
+    chain = optimist_prompt | llm_dynamic | StrOutputParser()
     data = f"{state.get('search_data', '')}\n\n{state.get('scraped_data', '')}"
-    res = optimist_chain.invoke({"topic": state["topic"], "data": data[:4000]})
+    res = chain.invoke({"topic": state["topic"], "data": data[:4000]})
     return {"optimist_view": res}
 
 # 4th agent: The Skeptic
@@ -90,11 +97,12 @@ skeptic_prompt = ChatPromptTemplate.from_messages([
     ("system", "You are the 'Skeptic' agent. Your goal is to identify risks, ethical concerns, technical limitations, and 'Worst Case Scenarios' based on the research data. Be critical but factual."),
     ("human", "Topic: {topic}\n\nResearch Data:\n{data}\n\nProvide a critical, cautious, and skeptical perspective on these findings.")
 ])
-skeptic_chain = skeptic_prompt | llm | StrOutputParser()
 
 def skeptic_node(state: ResearchState):
+    llm_dynamic = get_llm(state)
+    chain = skeptic_prompt | llm_dynamic | StrOutputParser()
     data = f"{state.get('search_data', '')}\n\n{state.get('scraped_data', '')}"
-    res = skeptic_chain.invoke({"topic": state["topic"], "data": data[:4000]})
+    res = chain.invoke({"topic": state["topic"], "data": data[:4000]})
     return {"skeptic_view": res}
 
 # 5th agent: Writer (The Synthesizer)
@@ -126,13 +134,14 @@ Structure the report as:
 
 Note: The [[Sub-topic]] tags are CRITICAL for the discovery engine. Use them for technical terms or interesting side-topics."""),
 ])
-writer_chain = writer_prompt | llm | StrOutputParser()
 
 def writer_node(state: ResearchState):
+    llm_dynamic = get_llm(state)
+    chain = writer_prompt | llm_dynamic | StrOutputParser()
     research_combined = f"SEARCH RESULTS:\n{state.get('search_data', '')}\n\nDETAILED SCRAPED CONTENT:\n{state.get('scraped_data', '')}"
     critique = state.get("critique", "None")
     
-    draft = writer_chain.invoke({
+    draft = chain.invoke({
         "topic": state["topic"],
         "research": research_combined[:3000],
         "optimist": state.get("optimist_view", ""),
@@ -164,11 +173,12 @@ Areas to Improve:
 One line verdict:
 ..."""),
 ])
-critic_chain = critic_prompt | llm | StrOutputParser()
 
 def critic_node(state: ResearchState):
+    llm_dynamic = get_llm(state)
+    chain = critic_prompt | llm_dynamic | StrOutputParser()
     draft = state.get("draft", "")
-    critique_text = critic_chain.invoke({"report": draft})
+    critique_text = chain.invoke({"report": draft})
     
     # parse score
     score = 0
@@ -225,4 +235,9 @@ Conversation History:
 
 User Question: {question}""")
 ])
+
+def get_chat_chain(model_name: str):
+    llm_dynamic = ChatGroq(model=model_name, temperature=0)
+    return chat_prompt | llm_dynamic | StrOutputParser()
+
 chat_chain = chat_prompt | llm | StrOutputParser()

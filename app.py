@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from agents import research_graph, chat_chain
+from agents import research_graph, chat_chain, get_chat_chain
 import streamlit.components.v1 as components
 from fpdf import FPDF
 import markdown
@@ -234,6 +234,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Input Section ────────────────────────────────────────────────────────────
+if "selected_model" not in st.session_state:
+    st.session_state.selected_model = "llama-3.3-70b-versatile"
+
 col1, col2, col3 = st.columns([1, 6, 1])
 with col2:
     topic = st.text_input(
@@ -241,6 +244,25 @@ with col2:
         placeholder="Enter your research topic (e.g. Advancements in Solid State Batteries)", 
         label_visibility="collapsed"
     )
+    
+    # Model Configuration Expander
+    with st.expander("⚙️ Swarm Configuration", expanded=False):
+        model_options = {
+            "Llama 3.3 70B (High Quality)": "llama-3.3-70b-versatile",
+            "Llama 3.1 8B (Fast / High Rate Limits)": "llama-3.1-8b-instant",
+            "Mixtral 8x7B (Balanced)": "mixtral-8x7b-32768",
+            "Gemma 2 9B (Creative)": "gemma2-9b-it"
+        }
+        current_model = st.session_state.selected_model
+        default_index = list(model_options.values()).index(current_model) if current_model in model_options.values() else 0
+        
+        selected_model_label = st.selectbox(
+            "Select LLM Model",
+            options=list(model_options.keys()),
+            index=default_index
+        )
+        selected_model = model_options[selected_model_label]
+        
     run_btn = st.button("Initialize Swarm")
 
 # ── Logic & Workflow Visualization ───────────────────────────────────────────
@@ -249,6 +271,7 @@ if run_btn:
         st.warning("Please enter a topic.")
     else:
         st.session_state.topic_input = topic
+        st.session_state.selected_model = selected_model
         st.session_state.results = {}
         st.session_state.running = True
         st.session_state.done = False
@@ -305,7 +328,8 @@ if st.session_state.running and not st.session_state.done:
     
     # Stream the LangGraph
     try:
-        for event in research_graph.stream({"topic": topic_val, "iterations": 0}):
+        selected_model = st.session_state.get("selected_model", "llama-3.3-70b-versatile")
+        for event in research_graph.stream({"topic": topic_val, "iterations": 0, "model": selected_model}):
             for node_name, state_update in event.items():
                 if node_name == "search_node":
                     r["search"] = state_update.get("search_data", "")
@@ -472,7 +496,9 @@ if st.session_state.done and r:
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
                     history_str = "\\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[:-1]])
-                    response = chat_chain.invoke({
+                    selected_model = st.session_state.get("selected_model", "llama-3.3-70b-versatile")
+                    dynamic_chat_chain = get_chat_chain(selected_model)
+                    response = dynamic_chat_chain.invoke({
                         "report": r["writer"],
                         "history": history_str,
                         "question": prompt
