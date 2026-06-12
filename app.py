@@ -270,30 +270,34 @@ def get_step_class(step_name):
     return ""
 
 if st.session_state.running or st.session_state.done:
-    # Workflow Progress Bar
-    st.markdown(f"""
-    <div style="position: relative;">
-        <div class="workflow-container">
-            <div class="workflow-line"></div>
-            <div class="workflow-step">
-                <div class="step-icon {get_step_class('search')}">🔍</div>
-                <div class="step-label">Web Search</div>
-            </div>
-            <div class="workflow-step">
-                <div class="step-icon {get_step_class('reader')}">📄</div>
-                <div class="step-label">Data Extraction</div>
-            </div>
-            <div class="workflow-step">
-                <div class="step-icon {get_step_class('writer')}">✍️</div>
-                <div class="step-label">Synthesis</div>
-            </div>
-            <div class="workflow-step">
-                <div class="step-icon {get_step_class('critic')}">🧐</div>
-                <div class="step-label">Peer Review</div>
+    workflow_placeholder = st.empty()
+    
+    def render_workflow_bar():
+        workflow_placeholder.markdown(f"""
+        <div style="position: relative;">
+            <div class="workflow-container">
+                <div class="workflow-line"></div>
+                <div class="workflow-step">
+                    <div class="step-icon {get_step_class('search')}">🔍</div>
+                    <div class="step-label">Web Search</div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-icon {get_step_class('reader')}">📄</div>
+                    <div class="step-label">Data Extraction</div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-icon {get_step_class('writer')}">✍️</div>
+                    <div class="step-label">Synthesis</div>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-icon {get_step_class('critic')}">🧐</div>
+                    <div class="step-label">Peer Review</div>
+                </div>
             </div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+        
+    render_workflow_bar()
 
 if st.session_state.running and not st.session_state.done:
     status = st.empty()
@@ -306,10 +310,12 @@ if st.session_state.running and not st.session_state.done:
                 if node_name == "search_node":
                     r["search"] = state_update.get("search_data", "")
                     st.session_state.results = r
+                    render_workflow_bar()
                     status.info("📄 Reader Agent is extracting content from top sources...")
                 elif node_name == "reader_node":
                     r["reader"] = state_update.get("scraped_data", "")
                     st.session_state.results = r
+                    render_workflow_bar()
                     status.info("🎭 Spawning the Optimist and Skeptic for debate...")
                 elif node_name == "optimist_node":
                     r["optimist"] = state_update.get("optimist_view", "")
@@ -317,16 +323,19 @@ if st.session_state.running and not st.session_state.done:
                 elif node_name == "skeptic_node":
                     r["skeptic"] = state_update.get("skeptic_view", "")
                     st.session_state.results = r
+                    render_workflow_bar()
                     status.info("✍️ Synthesizer is weaving the perspectives into a report...")
                 elif node_name == "writer_node":
                     r["writer"] = state_update.get("draft", "")
                     r["iterations"] = state_update.get("iterations", 1)
                     st.session_state.results = r
+                    render_workflow_bar()
                     status.info("🧐 Critic is performing peer review...")
                 elif node_name == "critic_node":
                     r["critic"] = state_update.get("critique", "")
                     r["score"] = state_update.get("score", 0)
                     st.session_state.results = r
+                    render_workflow_bar()
                     
                     # If the score is less than 8 and we haven't hit the loop limit, it will route back
                     if r["score"] < 8 and r.get("iterations", 1) < 3:
@@ -337,6 +346,7 @@ if st.session_state.running and not st.session_state.done:
                         if "critic" in r: del r["critic"]
                         if "writer" in r: del r["writer"]
                         st.session_state.results = r
+                        render_workflow_bar()
     except Exception as e:
         status.error(f"⚠️ A connection error occurred: {str(e)}")
         st.session_state.running = False

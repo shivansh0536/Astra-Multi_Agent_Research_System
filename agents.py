@@ -1,6 +1,5 @@
 import re
 from typing import TypedDict
-from langgraph.prebuilt import create_react_agent
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -27,20 +26,52 @@ class ResearchState(TypedDict):
 
 # 1st agent: Search
 def search_node(state: ResearchState):
-    agent = create_react_agent(llm, tools=[web_search])
     topic = state["topic"]
-    res = agent.invoke({"messages": [("user", f"Find recent, reliable and detailed information about: {topic}")]})
-    return {"search_data": res["messages"][-1].content}
+    try:
+        search_data = web_search.invoke(topic)
+    except Exception as e:
+        search_data = f"Error during web search: {str(e)}"
+    return {"search_data": search_data}
 
 # 2nd agent: Reader
 def reader_node(state: ResearchState):
-    agent = create_react_agent(llm, tools=[scrape_url])
     topic = state["topic"]
     search_data = state.get("search_data", "")
-    res = agent.invoke({
-        "messages": [("user", f"Based on the following search results about '{topic}', pick the most relevant URL and scrape it for deeper content.\n\nSearch Results:\n{search_data[:1500]}")]
-    })
-    return {"scraped_data": res["messages"][-1].content}
+    
+    # Ask LLM to pick the top 3 most relevant URLs
+    url_selector_prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are a precise link selector. Read the search results and return the top 3 most relevant URLs to scrape for deeper information on the topic. Return them as a clean, comma-separated list. Do not include any other text, markdown, or explanation. Example: https://example1.com, https://example2.com, https://example3.com"),
+        ("human", "Topic: {topic}\n\nSearch Results:\n{search_data}")
+    ])
+    
+    url_chain = url_selector_prompt | llm | StrOutputParser()
+    try:
+        urls_raw = url_chain.invoke({"topic": topic, "search_data": search_data[:2000]})
+        urls = [re.sub(r'[`\'"\s]', '', u) for u in urls_raw.split(",") if "http" in u]
+    except Exception:
+        urls = []
+        
+    if not urls:
+        urls = re.findall(r'https?://[^\s\)\}\]]+', search_data)
+        
+    scraped_content = ""
+    success = False
+    
+    for url in urls[:3]:
+        url = url.strip().strip("[]().,")
+        try:
+            content = scrape_url.invoke(url)
+            if content and not content.startswith("Could not scrape URL"):
+                scraped_content = content
+                success = True
+                break
+        except Exception:
+            continue
+            
+    if not success:
+        scraped_content = f"Could not scrape detailed content from sources. Falling back to search snippets:\n\n{search_data[:2000]}"
+        
+    return {"scraped_data": scraped_content}
 
 # 3rd agent: The Optimist
 optimist_prompt = ChatPromptTemplate.from_messages([
