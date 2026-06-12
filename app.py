@@ -262,6 +262,7 @@ with col2:
             index=default_index
         )
         selected_model = model_options[selected_model_label]
+        st.info("💡 **Rate Limit Hint:** If you hit a daily token limit (429) for Llama 3.3 70B, choose **Llama 3.1 8B**. It is extremely fast and has very high rate limits.")
         
     run_btn = st.button("Initialize Swarm")
 
@@ -372,7 +373,12 @@ if st.session_state.running and not st.session_state.done:
                         st.session_state.results = r
                         render_workflow_bar()
     except Exception as e:
-        status.error(f"⚠️ A connection error occurred: {str(e)}")
+        err_msg = str(e)
+        if "429" in err_msg or "rate_limit" in err_msg.lower():
+            status.error("⚠️ **Rate Limit Exceeded (429):** You have hit Groq's daily token limit for Llama 3.3 70B.")
+            st.info("💡 **Solution:** Expand **⚙️ Swarm Configuration** below and select **Llama 3.1 8B**. It is extremely fast and has very high daily token limits, bypassing the rate limit block!")
+        else:
+            status.error(f"⚠️ A connection error occurred: {err_msg}")
         st.session_state.running = False
         st.stop()
     
