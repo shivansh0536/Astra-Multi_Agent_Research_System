@@ -375,8 +375,10 @@ if st.session_state.running and not st.session_state.done:
     except Exception as e:
         err_msg = str(e)
         if "429" in err_msg or "rate_limit" in err_msg.lower():
-            status.error("⚠️ **Rate Limit Exceeded (429):** You have hit Groq's daily token limit for Llama 3.3 70B.")
-            st.info("💡 **Solution:** Expand **⚙️ Swarm Configuration** below and select **Llama 3.1 8B**. It is extremely fast and has very high daily token limits, bypassing the rate limit block!")
+            current_model_name = st.session_state.get("selected_model", "llama-3.3-70b-versatile")
+            status.error(f"⚠️ **Rate Limit Exceeded (429):** You have hit Groq's rate limit for model `{current_model_name}`.")
+            st.info("💡 **Solution:** Expand **⚙️ Swarm Configuration** below and select **Llama 3.1 8B** (if not already selected). It is extremely fast and has very high daily token limits.")
+            st.warning(f"**Raw Error Details:** {err_msg}")
         else:
             status.error(f"⚠️ A connection error occurred: {err_msg}")
         st.session_state.running = False
